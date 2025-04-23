@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from itertools import count
 from formula_env import FormulaEnv
-from gymnasium.envs.registration import register
+from gym.envs.registration import register
 
 register(id='FormulaEnv-v0', entry_point='formula_env:FormulaEnv')
 

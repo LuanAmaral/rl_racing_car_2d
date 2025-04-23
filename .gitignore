@@ -77,3 +77,6 @@ events.out.tfevents.*
 
 # folders
 exp*/
+
+#virtual environments
+*env/

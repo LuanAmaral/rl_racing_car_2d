@@ -1,8 +1,10 @@
 import numpy as np
-import gymnasium as gym
+import gym
 from  tracks.circular import circular_path
 from shapely.geometry import Polygon, Point
 import pygame
+
+INF  = 1e4
 
 class FormulaEnv(gym.Env):
     def __init__(self, render_mode=None, render_sleep=100):
@@ -22,20 +24,20 @@ class FormulaEnv(gym.Env):
         
         self.observation_space = gym.spaces.Dict(
             {
-                "position": gym.spaces.Box(low=-1000, high=1000, shape=(2,), dtype=np.float32),
-                "velocity": gym.spaces.Box(low=-1000, high=1000, shape=(1,), dtype=np.float32),
+                "position": gym.spaces.Box(low=-INF, high=INF, shape=(2,), dtype=np.float32),
+                "velocity": gym.spaces.Box(low=-INF, high=INF, shape=(1,), dtype=np.float32),
                 "yaw": gym.spaces.Box(low=-np.pi, high=np.pi, shape=(1,), dtype=np.float32),
                 "steer_angle": gym.spaces.Box(low=-self.steer_limit, high=self.steer_limit, shape=(1,), dtype=np.float32),
-                "left_cones": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.cones_num, 2), dtype=np.float32),
-                "right_cones": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(self.cones_num, 2), dtype=np.float32),
-                "start_cones": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2, 2), dtype=np.float32),
+                "left_cones": gym.spaces.Box(low=-INF, high=INF, shape=(self.cones_num, 2), dtype=np.float32),
+                "right_cones": gym.spaces.Box(low=-INF, high=INF, shape=(self.cones_num, 2), dtype=np.float32),
+                "start_cones": gym.spaces.Box(low=-INF, high=INF, shape=(2, 2), dtype=np.float32),
             }
         )
         
         self.action_space = gym.spaces.Dict(
             {
                 "steering_velocity": gym.spaces.Box(low=-np.pi/2, high=np.pi/2, shape=(1,), dtype=np.float32),
-                "acceleration": gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32),
+                "acceleration": gym.spaces.Box(low=-100, high=100, shape=(1,), dtype=np.float32),
             }
         )
         
@@ -90,7 +92,7 @@ class FormulaEnv(gym.Env):
         if orange_cones_dist[0] < 5 and orange_cones_dist[1] < 5:
             close_start_cones = self.start_cones
         else:
-            close_start_cones = np.array([[-np.inf, np.inf], [np.inf, np.inf]]) 
+            close_start_cones = np.array([[-INF, -INF], [-INF, -INF]]) 
         
        # return as a line array
         return np.array([
@@ -175,6 +177,8 @@ class FormulaEnv(gym.Env):
         car_surface.fill((255, 0, 0))  # Fill the car surface with red (or any color)
 
         # Rotate the car surface
+        if(np.isnan(self.agent_state[2])):
+            self.agent_state[2] = 0
         rotated_car = pygame.transform.rotate(car_surface, self.agent_state[2] * 180 / np.pi)
 
         # Get the rotated car's rect and set its center
