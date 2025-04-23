@@ -128,7 +128,7 @@ class FormulaEnv(gym.Env):
         position = observation[:2]
         if not polygon.contains(Point(position)):
             print("Out of track")
-            reward += -10.0
+            reward += -INF
 
         velocity = observation[3]
         if velocity < 0.1:
