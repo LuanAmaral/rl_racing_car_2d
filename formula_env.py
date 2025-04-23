@@ -50,10 +50,17 @@ class FormulaEnv(gym.Env):
             pygame.init()
             self.screen_width = 1000
             self.screen_height = 1000
-            self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+            self.stats_width = 200
+            self.stats_height = self.screen_height
+            self.screen = pygame.display.set_mode((self.screen_width + self.stats_width, self.screen_height))
+            self.sim_screen = pygame.Surface((self.screen_width, self.screen_height))
+            self.stats_screen = pygame.Surface((self.stats_width, self.stats_height))
+            self.stats_screen.fill((0, 0, 0))
+            self.screen.blit(self.sim_screen, (0, 0))
+            self.screen.blit(self.stats_screen, (self.screen_width, 0))
             pygame.display.set_caption("Formula Car Environment")
             self.clock = pygame.time.Clock()
-            self._render()
+            self._render(reward=0)
     
     def _car_kinematic(self, state, action):
         """
@@ -120,14 +127,16 @@ class FormulaEnv(gym.Env):
         polygon = Polygon( left_cones.tolist() + right_cones.tolist())
         position = observation[:2]
         if not polygon.contains(Point(position)):
+            print("Out of track")
             reward += -10.0
 
         velocity = observation[3]
         if velocity < 0.1:
+            print("Car is not moving")
             reward += -1.0
             
         reward += velocity * 0.1
-        
+        print(velocity)
         return reward
         
     def reset(self):
@@ -148,11 +157,11 @@ class FormulaEnv(gym.Env):
         done = False
         
         if self.render_mode is not None:
-            self._render()
+            self._render(reward)
 
         return observation, reward, done, {}, {}
 
-    def _render(self):
+    def _render(self, reward):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
@@ -187,6 +196,23 @@ class FormulaEnv(gym.Env):
 
         # Blit the rotated car onto the screen
         self.screen.blit(rotated_car, rotated_car_rect)
+
+        # Update the stats screen (right part of the screen)
+        self.stats_screen.fill((50, 50, 50))  # Fill the stats screen with green
+
+        # Display the reward as a number
+        font = pygame.font.Font(None, 36)  # Create a font object
+        reward_text = font.render(f"Reward: {reward:.2f}", True, (0, 0, 0))  # Render the reward text
+        self.stats_screen.blit(reward_text, (10, 10))  # Blit the text onto the stats screen
+
+        # Draw a bar representing the reward
+        bar_width = int((reward / 100) * (self.stats_width - 20))  # Scale the reward to fit the bar width
+        bar_width = max(0, min(bar_width, self.stats_width - 20))  # Clamp the bar width between 0 and max width
+        pygame.draw.rect(self.stats_screen, (0, 0, 0), (10, 50, bar_width, 20))  # Draw the reward bar
+
+        # Blit the stats screen onto the main screen
+        self.screen.blit(self.stats_screen, (self.screen_width, 0))
+
         
         pygame.display.flip()
         self.clock.tick(60)
