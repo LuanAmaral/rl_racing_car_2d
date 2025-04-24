@@ -14,6 +14,13 @@ class FormulaEnv(gym.Env):
         self.steer_limit = np.deg2rad(75) # steering angle limit
         self.cones_num = 6 # number of cones
         
+        self.min_acc = -5.0 # m/s^2
+        self.max_acc = 5.0 # m/s^2
+        self.max_steering_vel = np.deg2rad(20) # rad/s
+        self.min_steering_vel = -self.max_steering_vel # rad/s
+        self.max_vel = 150.0 # m/s
+        self.min_vel = 0.0 # m/s
+        
         [self.left_cones,
             self.right_cones,
             self.start_cones,
@@ -25,7 +32,7 @@ class FormulaEnv(gym.Env):
         self.observation_space = gym.spaces.Dict(
             {
                 "position": gym.spaces.Box(low=-INF, high=INF, shape=(2,), dtype=np.float32),
-                "velocity": gym.spaces.Box(low=-INF, high=INF, shape=(1,), dtype=np.float32),
+                "velocity": gym.spaces.Box(low=self.min_vel, high=self.max_vel, shape=(1,), dtype=np.float32),
                 "yaw": gym.spaces.Box(low=-np.pi, high=np.pi, shape=(1,), dtype=np.float32),
                 "steer_angle": gym.spaces.Box(low=-self.steer_limit, high=self.steer_limit, shape=(1,), dtype=np.float32),
                 "left_cones": gym.spaces.Box(low=-INF, high=INF, shape=(self.cones_num, 2), dtype=np.float32),
@@ -36,8 +43,8 @@ class FormulaEnv(gym.Env):
         
         self.action_space = gym.spaces.Dict(
             {
-                "steering_velocity": gym.spaces.Box(low=-np.pi/2, high=np.pi/2, shape=(1,), dtype=np.float32),
-                "acceleration": gym.spaces.Box(low=-100, high=100, shape=(1,), dtype=np.float32),
+                "steering_velocity": gym.spaces.Box(low=self.min_steering_vel, high=self.max_steering_vel, shape=(1,), dtype=np.float32),
+                "acceleration": gym.spaces.Box(low=self.min_acc, high=self.max_acc, shape=(1,), dtype=np.float32),
             }
         )
         
@@ -60,7 +67,7 @@ class FormulaEnv(gym.Env):
             self.screen.blit(self.stats_screen, (self.screen_width, 0))
             pygame.display.set_caption("Formula Car Environment")
             self.clock = pygame.time.Clock()
-            self._render(reward=0)
+            self._render(reward=0, action=[0, 0])
     
     def _car_kinematic(self, state, action):
         """
@@ -77,7 +84,18 @@ class FormulaEnv(gym.Env):
         new_state[1] += velocity * np.sin(yaw) * self.dt
         new_state[2] += (velocity / 2.5) * np.tan(steer_angle) * self.dt
         new_state[3] += acceleration * self.dt
-        new_state[4] = np.clip(new_state[4] + steer_velocity*self.dt , -self.steer_limit, self.steer_limit)  
+        new_state[4] = np.clip(new_state[4] + steer_velocity*self.dt , -self.steer_limit, self.steer_limit)
+        
+        # yaw angle normalization
+        if new_state[2] > np.pi:
+            new_state[2] -= 2 * np.pi
+        elif new_state[2] < -np.pi:
+            new_state[2] += 2 * np.pi
+            
+        # velocity limit
+        new_state[3] = np.clip(new_state[3], 
+                               self.observation_space["velocity"].low[0], 
+                               self.observation_space["velocity"].high[0])  
         
         return new_state
     
@@ -127,16 +145,16 @@ class FormulaEnv(gym.Env):
         polygon = Polygon( left_cones.tolist() + right_cones.tolist())
         position = observation[:2]
         if not polygon.contains(Point(position)):
-            print("Out of track")
+            # print("Out of track")
             reward += -INF
 
         velocity = observation[3]
         if velocity < 0.1:
-            print("Car is not moving")
+            # print("Car is not moving")
             reward += -1.0
             
         reward += velocity * 0.1
-        print(velocity)
+        # print(velocity)
         return reward
         
     def reset(self):
@@ -157,11 +175,15 @@ class FormulaEnv(gym.Env):
         done = False
         
         if self.render_mode is not None:
-            self._render(reward)
+            self._render(reward, action)
 
         return observation, reward, done, {}, {}
 
-    def _render(self, reward):
+    # Normalize the value between min and max before calculating the bar width
+    def _normalize(self, value, min, max):
+        return (value - min) / (max - min)
+
+    def _render(self, reward, action):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
@@ -210,9 +232,35 @@ class FormulaEnv(gym.Env):
         bar_width = max(0, min(bar_width, self.stats_width - 20))  # Clamp the bar width between 0 and max width
         pygame.draw.rect(self.stats_screen, (0, 0, 0), (10, 50, bar_width, 20))  # Draw the reward bar
 
+        # Display velocity as a number and bar
+        velocity = self.agent_state[3]  
+        velocity_text = font.render(f"Velocity: {velocity:.2f}", True, (0, 0, 0))
+        self.stats_screen.blit(velocity_text, (10, 90))
+        normalized_velocity = self._normalize(velocity, self.min_vel, self.max_vel)
+        velocity_bar_width = int(normalized_velocity * (self.stats_width - 20))
+        velocity_bar_width = max(0, min(velocity_bar_width, self.stats_width - 20))
+        pygame.draw.rect(self.stats_screen, (0, 0, 255), (10, 130, velocity_bar_width, 20))
+
+        # Display acceleration as a number and bar
+        acceleration = action[0]  
+        acceleration_text = font.render(f"Acceleration: {acceleration:.2f}", True, (0, 0, 0))
+        self.stats_screen.blit(acceleration_text, (10, 170))
+        normalized_acceleration = self._normalize(acceleration, self.min_acc, self.max_acc)
+        acceleration_bar_width = int(normalized_acceleration * (self.stats_width - 20))
+        acceleration_bar_width = max(0, min(acceleration_bar_width, self.stats_width - 20))
+        pygame.draw.rect(self.stats_screen, (0, 255, 0), (10, 210, acceleration_bar_width, 20))
+
+        # Display steering as a number and bar
+        steering = action[1]
+        steering_text = font.render(f"Steering: {steering:.2f}", True, (0, 0, 0))
+        self.stats_screen.blit(steering_text, (10, 250))
+        normalized_steering = self._normalize(steering, self.min_steering_vel, self.max_steering_vel)
+        steering_bar_width = int(normalized_steering * (self.stats_width - 20))
+        steering_bar_width = max(0, min(steering_bar_width, self.stats_width - 20))
+        pygame.draw.rect(self.stats_screen, (255, 0, 0), (10, 290, steering_bar_width, 20))
+
         # Blit the stats screen onto the main screen
         self.screen.blit(self.stats_screen, (self.screen_width, 0))
-
         
         pygame.display.flip()
         self.clock.tick(60)
