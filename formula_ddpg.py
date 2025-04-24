@@ -24,7 +24,7 @@ tau = 0.005
 target_update_interval = 1
 test_iteration = 10
 
-learning_rate = 1e-4
+learning_rate = 1e-5
 gamma = 0.99
 buffer_capacity = 1000000
 batch_size = 100
@@ -36,11 +36,11 @@ render = True
 log_interval = 50
 load = False
 render_interval = 100
-exploration_noise = 0.1
-max_episode = 100000
+exploration_noise = 0.4
+max_episode = 1000
 print_log = 5
 update_iteration = 200
-max_length_of_trajectory = 2000
+max_length_of_trajectory = 100
 
 # Global Variables
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -123,12 +123,12 @@ class DDPG(object):
         self.actor = Actor(state_dim, action_dim, max_action).to(device)
         self.actor_target = Actor(state_dim, action_dim, max_action).to(device)
         self.actor_target.load_state_dict(self.actor.state_dict())
-        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=1e-4)
+        self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=learning_rate)
 
         self.critic = Critic(state_dim, action_dim).to(device)
         self.critic_target = Critic(state_dim, action_dim).to(device)
         self.critic_target.load_state_dict(self.critic.state_dict())
-        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=1e-3)
+        self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=learning_rate)
         self.replay_buffer = ReplayBuffer(buffer_capacity)
         self.writer = SummaryWriter(directory)
 
@@ -204,6 +204,7 @@ class DDPG(object):
 def main():
     agent = DDPG(state_dim, action_dim, max_action)
     ep_r = 0
+    total_reward_array = []
     if mode == 'test':
         agent.load()
         for i in range(test_iteration):
@@ -232,7 +233,7 @@ def main():
                     min_action, max_action)
 
                 next_state, reward, done, _, info = env.step(action)
-                if render and i >= render_interval : env.render()
+                # if render and i >= render_interval : env.render()
                 agent.replay_buffer.push((state, next_state, action, reward, float(done)))
 
                 state = next_state
@@ -244,6 +245,10 @@ def main():
             print("Total T:{} Episode: \t{} Total Reward: \t{:0.2f}".format(total_step, i, total_reward))
             agent.update()
            # "Total T: %d Episode Num: %d Episode T: %d Reward: %f
+
+            # save rewards in file
+            total_reward_array.append(total_reward)
+            np.save('total_reward.npy', total_reward_array)
 
             if i % log_interval == 0:
                 agent.save()
