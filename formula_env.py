@@ -14,12 +14,15 @@ class FormulaEnv(gym.Env):
         self.steer_limit = np.deg2rad(75) # steering angle limit
         self.cones_num = 6 # number of cones
         
-        self.min_acc = -5.0 # m/s^2
-        self.max_acc = 5.0 # m/s^2
+        self.min_acc = -1.0 # m/s^2
+        self.max_acc = 1.0 # m/s^2
         self.max_steering_vel = np.deg2rad(20) # rad/s
         self.min_steering_vel = -self.max_steering_vel # rad/s
         self.max_vel = 150.0 # m/s
         self.min_vel = 0.0 # m/s
+
+        self.acceleration = 0.0
+        self.steering_velocity = 0.0
         
         [self.left_cones,
             self.right_cones,
@@ -146,14 +149,18 @@ class FormulaEnv(gym.Env):
         position = observation[:2]
         if not polygon.contains(Point(position)):
             # print("Out of track")
-            reward += -INF
+            reward += -100
 
         velocity = observation[3]
         if velocity < 0.1:
             # print("Car is not moving")
-            reward += -1.0
+            reward += -10
+            if self.acceleration <= 0:
+                reward += -10
+            if self.acceleration > 0:
+                reward += 10
             
-        reward += velocity * 0.1
+        reward += velocity
         # print(velocity)
         return reward
         
@@ -168,6 +175,9 @@ class FormulaEnv(gym.Env):
         """
         Take a step in the environment based on the action taken.
         """
+        self.acceleration = action[0]
+        self.steering_velocity = action[1]
+
         self.agent_state = self._car_kinematic(self.agent_state, action)
         observation = self._return_observation()
         reward = self._get_reward(observation)
