@@ -253,7 +253,7 @@ class FormulaEnv(gym.Env):
 
         # Display acceleration as a number and bar
         acceleration = action[0]  
-        acceleration_text = font.render(f"Acceleration: {acceleration:.2f}", True, (0, 0, 0))
+        acceleration_text = font.render(f"Acc: {acceleration:.2f}", True, (0, 0, 0))
         self.stats_screen.blit(acceleration_text, (10, 170))
         normalized_acceleration = self._normalize(acceleration, self.min_acc, self.max_acc)
         acceleration_bar_width = int(normalized_acceleration * (self.stats_width - 20))
