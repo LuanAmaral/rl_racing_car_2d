@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.so
 *.npy
+*.pth
 
 # Cython build
 *.c

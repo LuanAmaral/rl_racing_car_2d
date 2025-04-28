@@ -54,6 +54,15 @@ max_action = [float(env.action_space["acceleration"].high[0]), float(env.action_
 min_action = [float(env.action_space["acceleration"].low[0]), float(env.action_space["steering_velocity"].low[0])]
 min_Val = torch.tensor(1e-7).float().to(device) # min value
 
+# Set random seed
+random.seed(random_seed)
+np.random.seed(random_seed)
+torch.manual_seed(random_seed)
+if device == 'cuda':
+    torch.cuda.manual_seed(random_seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 class ReplayBuffer():
     '''
     Code based on:
@@ -93,14 +102,20 @@ class Actor(nn.Module):
 
         self.l1 = nn.Linear(state_dim, 400)
         self.l2 = nn.Linear(400, 300)
-        self.l3 = nn.Linear(300, action_dim)
+        self.l3 = nn.Linear(300, 200)
+        self.l4 = nn.Linear(200, 200)
+        self.l5 = nn.Linear(200, 100)
+        self.l6 = nn.Linear(100, action_dim)
 
         self.register_buffer("max_action", torch.tensor(max_action, dtype=torch.float32))
 
     def forward(self, x):
         x = F.relu(self.l1(x))
         x = F.relu(self.l2(x))
-        x = self.max_action * torch.tanh(self.l3(x))
+        x = F.relu(self.l3(x))
+        x = F.relu(self.l4(x))
+        x = F.relu(self.l5(x))
+        x = self.max_action * torch.tanh(self.l6(x))
         return x
 
 class Critic(nn.Module):
@@ -109,12 +124,18 @@ class Critic(nn.Module):
 
         self.l1 = nn.Linear(state_dim + action_dim, 400)
         self.l2 = nn.Linear(400 , 300)
-        self.l3 = nn.Linear(300, 1)
+        self.l3 = nn.Linear(300, 200)
+        self.l4 = nn.Linear(200, 200)
+        self.l5 = nn.Linear(200, 100)
+        self.l6 = nn.Linear(100, 1)
 
     def forward(self, x, u):
         x = F.relu(self.l1(torch.cat([x, u ], -1)))
         x = F.relu(self.l2(x))
-        x = self.l3(x)
+        x = F.relu(self.l3(x))
+        x = F.relu(self.l4(x))
+        x = F.relu(self.l5(x))
+        x = self.l6(x)
         return x
 
 
