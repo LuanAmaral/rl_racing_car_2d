@@ -250,9 +250,9 @@ def main():
             state = env.reset()
             for t in count():
                 action = agent.select_action(state)
-                action = (action + np.random.normal(0, exploration_noise, size=env.action_dim)).clip(
-                    min_action, max_action)
-
+                action = (action + np.random.normal(0, exploration_noise, size=env.action_dim)*max_action)
+                action = np.clip(action, min_action, max_action)
+                
                 next_state, reward, done, _, info = env.step(action)
                 # if render and i >= render_interval : env.render()
                 agent.replay_buffer.push((state, next_state, action, reward, float(done)))
