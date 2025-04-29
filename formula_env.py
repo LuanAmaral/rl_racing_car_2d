@@ -24,6 +24,9 @@ class FormulaEnv(gym.Env):
         self.acceleration = 0.0
         self.steering_velocity = 0.0
         
+        self.left_close_cones = []
+        self.right_close_cones = []
+        
         [self.left_cones,
             self.right_cones,
             self.start_cones,
@@ -111,10 +114,12 @@ class FormulaEnv(gym.Env):
         left_cones_dist = np.linalg.norm(self.left_cones - self.agent_state[:2], axis=1)
         argmin_left_cones = np.argsort(left_cones_dist)
         close_left_cones = self.left_cones[argmin_left_cones][:self.cones_num]
+        self.left_close_cones = close_left_cones
         
         right_cones_dist = np.linalg.norm(self.right_cones - self.agent_state[:2], axis=1)
         argmin_right_cones = np.argsort(right_cones_dist)
         close_right_cones = self.right_cones[argmin_right_cones][:self.cones_num]
+        self.right_close_cones = close_right_cones
         
         orange_cones_dist = np.linalg.norm(self.start_cones - self.agent_state[:2], axis=1)
         if orange_cones_dist[0] < 5 and orange_cones_dist[1] < 5:
@@ -134,7 +139,23 @@ class FormulaEnv(gym.Env):
             close_start_cones.flatten().tolist()
         )
         
+    def _get_vertices(self, left_cones, right_cones):
+        # Combine all cones into a single array
+        all_cones = np.vstack((left_cones, right_cones))
         
+        # Calculate the centroid of all points
+        centroid = np.mean(all_cones, axis=0)
+        
+        # Calculate the angle of each point relative to the centroid
+        angles = np.arctan2(all_cones[:, 1] - centroid[1], all_cones[:, 0] - centroid[0])
+        
+        # Sort points by angle
+        sorted_indices = np.argsort(angles)
+        sorted_cones = all_cones[sorted_indices]
+        
+        # Return the sorted vertices
+        return sorted_cones
+            
     def _get_reward(self, observation):
         """
         Calculate the reward based on the current state of the agent.
@@ -145,7 +166,8 @@ class FormulaEnv(gym.Env):
         right_cones = observation[5+self.cones_num*2:5+self.cones_num*4].reshape(self.cones_num, 2)
         
         # check if the car is within the track boundaries
-        polygon = Polygon( left_cones.tolist() + right_cones.tolist())
+        vertices = self._get_vertices(left_cones, right_cones)
+        polygon = Polygon(vertices)
         position = observation[:2]
         if not polygon.contains(Point(position)):
             # print("Out of track")
@@ -212,6 +234,14 @@ class FormulaEnv(gym.Env):
         # Draw start cones
         for cone in self.start_cones.T:
             pygame.draw.circle(self.screen, (255, 165, 0), (int(cone[0] * 80 + self.screen_width / 2), int(-cone[1] * 80 + self.screen_height / 2)), 5)
+            
+        # Paint the closest cones region
+        if len(self.left_close_cones) > 0 and len(self.right_close_cones) > 0:
+            vertices = self._get_vertices(self.left_close_cones, self.right_close_cones)
+            pygame.draw.polygon(self.screen, 
+                                (150, 150, 150, 0.5), 
+                                [(int(cone[0] * 80 + self.screen_width / 2), int(-cone[1] * 80 + self.screen_height / 2)) for cone in vertices],
+)
             
         # Draw car's position
         car_surface = pygame.Surface((40, 20), pygame.SRCALPHA)  # Create a transparent surface
