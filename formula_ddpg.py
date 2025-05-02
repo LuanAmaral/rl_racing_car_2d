@@ -24,7 +24,7 @@ tau = 0.005
 target_update_interval = 1
 test_iteration = 10
 
-learning_rate = 1e-5
+learning_rate = 1e-7
 gamma = 0.99
 buffer_capacity = 1000000
 batch_size = 100
@@ -36,7 +36,7 @@ render = True
 log_interval = 50
 load = False
 render_interval = 100
-exploration_noise = 0.4
+exploration_noise = 0.05
 max_episode = 1000
 print_log = 5
 update_iteration = 200
@@ -156,25 +156,45 @@ class DDPG(object):
         self.num_critic_update_iteration = 0
         self.num_actor_update_iteration = 0
         self.num_training = 0
-
+        
+        self.state_mean = torch.zeros(state_dim).to(device)
+        self.state_std = torch.ones(state_dim).to(device)
+        
+    def compute_state_stats(self):
+        # Compute mean and std of the states in the replay buffer
+        states = np.array([data[0] for data in self.replay_buffer.storage])
+        states = np.array(states)
+        self.state_mean = torch.mean(torch.tensor(states, dtype=torch.float32), dim=0).to(device)
+        self.state_std = torch.std(torch.tensor(states, dtype=torch.float32), dim=0).to(device)
+        
+    def normalize_state(self, state):
+        # Normalize the state using the computed mean and std
+        state = torch.tensor(state, dtype=torch.float32).to(device)
+        state = (state - self.state_mean) / (self.state_std)
+        return state
+        
     def select_action(self, state):
+        state = self.normalize_state(state).cpu().numpy()
         state = torch.FloatTensor(state.reshape(1, -1)).to(device)
         return self.actor(state).cpu().data.numpy().flatten()
 
     def update(self):
-
+        if len(self.replay_buffer.storage) < batch_size:
+            return
+        
+        self.compute_state_stats()
         for it in range(update_iteration):
             # Sample replay buffer
             x, y, u, r, d = self.replay_buffer.sample(batch_size)
-            state = torch.FloatTensor(x).to(device)
+            state = self.normalize_state(x)
             action = torch.FloatTensor(u).to(device)
-            next_state = torch.FloatTensor(y).to(device)
+            next_state = self.normalize_state(y)
             done = torch.FloatTensor(1-d).to(device)
             reward = torch.FloatTensor(r).to(device)
 
             # Compute the target Q value
             target_Q = self.critic_target(next_state, self.actor_target(next_state))
-            target_Q = reward + (done * gamma * target_Q).detach()
+            target_Q = reward + ((1-done) * gamma * target_Q).detach()
 
             # Get current Q estimate
             current_Q = self.critic(state, action)
